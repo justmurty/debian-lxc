@@ -28,6 +28,7 @@ root_check
 arch_check
 
 # Създаване на контейнер
+start
 build_container
 
 # Описание на контейнера
