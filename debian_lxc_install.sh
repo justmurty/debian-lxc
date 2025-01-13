@@ -11,22 +11,23 @@ PASSWORD="123123Raw"
 DISABLE_IPV6="yes"
 ENABLE_SSH="yes"
 NET_CONFIG="dhcp"
-STORAGE="local-lvm" # Променете, ако желаете да използвате друг сторидж, напр. "local"
+TEMPLATE_STORAGE="local" # Хранилище за шаблони
+STORAGE="local-lvm"      # Хранилище за контейнера
 
-# Функция за проверка на наличност на шаблон
+# Проверка за наличност на шаблон
 check_template() {
   echo -e "💡 Проверка за наличието на шаблон ${APP}..."
-  if ! pveam list "$STORAGE" | grep -q "debian-12-standard_12.0-1_amd64.tar.zst"; then
+  if ! pveam list "$TEMPLATE_STORAGE" | grep -q "debian-12-standard_12.0-1_amd64.tar.zst"; then
     echo -e "💡 Шаблонът не е наличен. Изтегляне..."
     pveam update
-    pveam download "$STORAGE" debian-12-standard_12.0-1_amd64.tar.zst
+    pveam download "$TEMPLATE_STORAGE" debian-12-standard_12.0-1_amd64.tar.zst
   fi
   echo -e "✔️ Шаблонът е наличен!"
 }
 
 create_lxc() {
   echo -e "💡 Създаване на LXC контейнер ${APP} с ID ${CT_ID}..."
-  pct create "$CT_ID" "$STORAGE":vztmpl/debian-12-standard_12.0-1_amd64.tar.zst \
+  pct create "$CT_ID" "$TEMPLATE_STORAGE":vztmpl/debian-12-standard_12.0-1_amd64.tar.zst \
     -hostname "$CT_NAME" \
     -rootfs "$STORAGE":"$DISK_SIZE" \
     -memory "$RAM_SIZE" \
