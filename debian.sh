@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source <(curl -s https://raw.githubusercontent.com/justmurty/debian-lxc/refs/heads/main/build.func)
+source <(curl -s https://raw.githubusercontent.com/<ВАШ_GITHUB_USER>/<ВАШ_РЕПОЗИТОРИЙ>/main/build.func)
 
 # Настройки на приложението
 APP="Debian"
@@ -20,8 +20,7 @@ variables
 color
 catch_errors
 
-# Стартиране на основните функции за създаване на контейнер
-start
+# Изпълнение на контейнера
 build_container
 description
 
