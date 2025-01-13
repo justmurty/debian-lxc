@@ -20,7 +20,13 @@ variables
 color
 catch_errors
 
-# Изпълнение на контейнера
+# Проверка на околната среда
+pve_check
+shell_check
+root_check
+arch_check
+
+# Основна логика
 build_container
 description
 
