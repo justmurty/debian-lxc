@@ -21,12 +21,6 @@ variables
 color
 catch_errors
 
-# Проверка на околната среда
-pve_check
-shell_check
-root_check
-arch_check
-
 # Създаване на контейнер
 start
 build_container
