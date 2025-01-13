@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -s https://raw.githubusercontent.com/<ВАШ_GITHUB_USER>/<ВАШ_РЕПОЗИТОРИЙ>/main/build.func)
+
+source <(curl -s https://raw.githubusercontent.com/justmurty/debian-lxc/refs/heads/main/build.func)
 
 # Настройки на приложението
 APP="Debian"
@@ -26,8 +27,10 @@ shell_check
 root_check
 arch_check
 
-# Основна логика
+# Създаване на контейнер
 build_container
+
+# Описание на контейнера
 description
 
 # Финално съобщение
