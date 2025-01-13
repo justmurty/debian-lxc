@@ -14,7 +14,7 @@ NET_CONFIG="dhcp"
 
 create_lxc() {
   echo -e "💡 Създаване на LXC контейнер ${APP} с ID ${CT_ID}..."
-  pct create "$CT_ID" local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst \
+  pct create "$CT_ID" local-lvm:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst \
     -hostname "$CT_NAME" \
     -rootfs local-lvm:"$DISK_SIZE" \
     -memory "$RAM_SIZE" \
