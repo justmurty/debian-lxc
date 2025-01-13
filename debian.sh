@@ -93,6 +93,7 @@ post_install() {
 }
 
 # Проверки и стартиране на инсталацията
+color  # Инициализация на цветове
 root_check
 pve_check
 catch_errors
