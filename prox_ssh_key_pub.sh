@@ -7,10 +7,19 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No color
 
+# Check if the user is root, if not use sudo
+if [[ $EUID -ne 0 ]]; then
+    SUDO='sudo'
+    echo -e "${YELLOW}Running as non-root user. Using sudo for privileged commands.${NC}"
+else
+    SUDO=''
+    echo -e "${GREEN}Running as root user.${NC}"
+fi
+
 # Check if whiptail is installed
 if ! command -v whiptail &> /dev/null; then
     echo -e "${RED}Error: 'whiptail' is not installed. Installing it now...${NC}"
-    apt update && apt install -y whiptail
+    $SUDO apt update && $SUDO apt install -y whiptail
     if [[ $? -ne 0 ]]; then
         echo -e "${RED}Failed to install 'whiptail'. Exiting.${NC}"
         exit 1
@@ -28,12 +37,22 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+# Function to install libguestfs-tools with progress bar
+install_libguestfs_tools() {
+    {
+        echo 10
+        $SUDO apt update -y > /dev/null 2>&1
+        echo 50
+        $SUDO apt install -y libguestfs-tools > /dev/null 2>&1
+        echo 100
+    } | whiptail --gauge "Installing 'libguestfs-tools'..." 6 50 0
+}
+
 # Check if VM is selected, and prompt to install libguestfs-tools
 if [[ "$CHOICES" == *"VM"* ]]; then
     if whiptail --title "Install libguestfs-tools" --yesno \
 "Do you want to install 'libguestfs-tools'? It is required for proper VM processing." 10 60; then
-        echo -e "${CYAN}Installing 'libguestfs-tools'...${NC}"
-        apt update && apt install -y libguestfs-tools
+        install_libguestfs_tools
         if [[ $? -ne 0 ]]; then
             echo -e "${RED}Failed to install 'libguestfs-tools'. VM processing may encounter issues.${NC}"
         else
@@ -53,57 +72,52 @@ if [[ -z "$PUB_KEY" ]]; then
     exit 1
 fi
 
-# Function to add SSH key to LXC container
-add_key_to_lxc() {
-    local VMID=$1
-    echo -e "${YELLOW}Adding key to LXC container $VMID...${NC}"
-    pct exec $VMID -- mkdir -p /root/.ssh
-    pct exec $VMID -- bash -c "echo \"$PUB_KEY\" >> /root/.ssh/authorized_keys"
-    echo -e "${GREEN}Key added to LXC container $VMID.${NC}"
-}
-
-# Function to add SSH key to VM
-add_key_to_vm() {
-    local VMID=$1
-    echo -e "${YELLOW}Adding key to VM $VMID...${NC}"
-    
-    DISK_PATH=$(qm config $VMID | grep '^scsi\|^virtio\|^ide' | head -1 | awk -F ':' '{print $2}' | awk '{print $1}')
-    MOUNT_DIR="/mnt/vm-$VMID"
-
-    if [[ -n "$DISK_PATH" ]]; then
-        mkdir -p $MOUNT_DIR
-        guestmount -a "/var/lib/vz/images/$VMID/$DISK_PATH" -i --ro $MOUNT_DIR 2>/dev/null
-
-        if [[ $? -ne 0 ]]; then
-            echo -e "${RED}Failed to mount VM $VMID. Skipping.${NC}"
-        else
-            if [[ -d "$MOUNT_DIR/root/.ssh" ]]; then
-                echo "$PUB_KEY" >> "$MOUNT_DIR/root/.ssh/authorized_keys"
-            else
-                mkdir -p "$MOUNT_DIR/root/.ssh"
-                echo "$PUB_KEY" > "$MOUNT_DIR/root/.ssh/authorized_keys"
-            fi
-            guestunmount $MOUNT_DIR
-            rmdir $MOUNT_DIR
-            echo -e "${GREEN}Key added to VM $VMID.${NC}"
-        fi
-    else
-        echo -e "${RED}No valid disk found for VM $VMID. Skipping.${NC}"
-    fi
-}
-
-# Process LXC if selected
+# Check for available LXC containers
+LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
 if [[ "$CHOICES" == *"LXC"* ]]; then
-    for ID in $(pct list | awk 'NR>1 {print $1}'); do
-        add_key_to_lxc $ID
-    done
+    if [[ -z "$LXC_IDS" ]]; then
+        echo -e "${YELLOW}No LXC containers found.${NC}"
+    else
+        for ID in $LXC_IDS; do
+            echo -e "${YELLOW}Adding key to LXC container $ID...${NC}"
+            $SUDO pct exec $ID -- mkdir -p /root/.ssh
+            $SUDO pct exec $ID -- bash -c "echo \"$PUB_KEY\" >> /root/.ssh/authorized_keys"
+            echo -e "${GREEN}Key added to LXC container $ID.${NC}"
+        done
+    fi
 fi
 
-# Process VM if selected
+# Check for available VMs
+VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
 if [[ "$CHOICES" == *"VM"* ]]; then
-    for ID in $(qm list | awk 'NR>1 {print $1}'); do
-        add_key_to_vm $ID
-    done
+    if [[ -z "$VM_IDS" ]]; then
+        echo -e "${YELLOW}No VMs found.${NC}"
+    else
+        for ID in $VM_IDS; do
+            echo -e "${YELLOW}Adding key to VM $ID...${NC}"
+            DISK_PATH=$($SUDO qm config $ID | grep '^scsi\|^virtio\|^ide' | head -1 | awk -F ':' '{print $2}' | awk '{print $1}')
+            MOUNT_DIR="/mnt/vm-$ID"
+            if [[ -n "$DISK_PATH" ]]; then
+                mkdir -p $MOUNT_DIR
+                $SUDO guestmount -a "/var/lib/vz/images/$ID/$DISK_PATH" -i --ro $MOUNT_DIR 2>/dev/null
+                if [[ $? -ne 0 ]]; then
+                    echo -e "${RED}Failed to mount VM $ID. Skipping.${NC}"
+                else
+                    if [[ -d "$MOUNT_DIR/root/.ssh" ]]; then
+                        echo "$PUB_KEY" | $SUDO tee -a "$MOUNT_DIR/root/.ssh/authorized_keys" > /dev/null
+                    else
+                        $SUDO mkdir -p "$MOUNT_DIR/root/.ssh"
+                        echo "$PUB_KEY" | $SUDO tee "$MOUNT_DIR/root/.ssh/authorized_keys" > /dev/null
+                    fi
+                    $SUDO guestunmount $MOUNT_DIR
+                    rmdir $MOUNT_DIR
+                    echo -e "${GREEN}Key added to VM $ID.${NC}"
+                fi
+            else
+                echo -e "${RED}No valid disk found for VM $ID. Skipping.${NC}"
+            fi
+        done
+    fi
 fi
 
-echo -e "${CYAN}Public key added to selected instances.${NC}"
+echo -e "${CYAN}Processing completed.${NC}"
