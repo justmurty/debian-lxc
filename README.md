@@ -21,7 +21,7 @@ This script simplifies the process of copying your SSH public key from a Windows
 1. **Open PowerShell as Administrator**:
    - Press `Win + X` → Select `Windows PowerShell (Admin)`.
 
-2.**Start the script**
+2.**Start the script:**
 ```powershell
 Invoke-Expression (Invoke-WebRequest -Uri "https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/prox_ssh_key_pub.ps1").Content
 ```
