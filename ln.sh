@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Color definitions
