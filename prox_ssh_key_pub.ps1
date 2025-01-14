@@ -38,7 +38,9 @@ if (!(Invoke-Expression $SSHCommand)) {
 }
 Write-Color "Public key successfully copied to Proxmox." "Green"
 
-$RemoteCommand = "bash -c \$(wget -qO- "https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh")"
+# Execute the Bash script from GitHub
+$GitHubURL = "https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh"
+$RemoteCommand = "bash -c \$(wget -qO- $GitHubURL)"
 
 Write-Color "Executing the script on Proxmox..." "Yellow"
 Invoke-Expression "ssh $ProxmoxUser@$ProxmoxHost '$RemoteCommand'"
