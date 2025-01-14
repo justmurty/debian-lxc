@@ -1,22 +1,32 @@
-# Proxmox SSH Public Key Adder
+# Proxmox SSH Public Key Adder (Windows Compatible)
 
-This script simplifies adding your SSH public key to LXC containers and virtual machines (VMs) in a Proxmox VE environment. It features an interactive menu for selecting which instances to process, handles the installation of required tools for VMs, and provides clear feedback if no instances are available.
+This script simplifies the process of copying your SSH public key from a Windows laptop to a Proxmox server and its LXC containers and VMs. It ensures seamless setup for SSH access across all instances.
 
 ---
 
 ## Features
-
-- **Interactive Selection**: Choose to process LXC containers, VMs, or both using a simple text-based interface.
-- **Tool Installation**: Automatically installs `libguestfs-tools` for VM processing, with a progress bar, if required.
-- **Instance Detection**: Checks for available LXC containers or VMs before processing and provides appropriate feedback.
-- **Public Key Input**: Prompts you to enter your SSH public key in a user-friendly way.
-- **Color-Coded Feedback**: Clear logs for each operation (success, warning, or error).
+- **Direct Execution**: Run the script directly from the URL without downloading it manually.
+- **Windows Compatible**: Designed for use with PowerShell on Windows systems.
+- **Automated Key Deployment**: Copies your SSH public key to:
+  - Proxmox Server
+  - All LXC containers
+  - All VMs
+- **Interactive**: Prompts for necessary information like Proxmox hostname and username.
 
 ---
 
-## How It Works
+## Quick Start
 
-1. **Start the Script**:
-   Run the script directly in your Proxmox VE terminal:
-   ```bash
-   bash -c "$(wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/main/prox_ssh_key_pub.sh)"
+### **Run the Script**
+1. **Open PowerShell as Administrator**:
+   - Press `Win + X` → Select `Windows PowerShell (Admin)`.
+
+2.**Start**
+```powershell
+Invoke-Expression (Invoke-WebRequest -Uri "https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/prox_ssh_key_pub.ps1").Content
+```
+
+3. **Set Execution Policy**:
+   Temporarily allow script execution:
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
