@@ -16,6 +16,6 @@ Ensure the following before running the script:
    ```bash
    apt install libguestfs-tools
 
-Start with:
+Start with in proxmox shell:
 ```bash
 bash -c "$(wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/main/prox_ssh_key_pub.sh)"
