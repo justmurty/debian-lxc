@@ -1,16 +1,16 @@
 # Proxmox SSH Public Key Adder
 
-This script simplifies adding your SSH public key to all LXC containers and virtual machines (VMs) in a Proxmox VE environment. It features an interactive menu that allows you to select which instances (LXC, VM, or both) to process and optionally installs the required tools for VM processing.
+This script simplifies adding your SSH public key to LXC containers and virtual machines (VMs) in a Proxmox VE environment. It features an interactive menu for selecting which instances to process, handles the installation of required tools for VMs, and provides clear feedback if no instances are available.
 
 ---
 
 ## Features
 
-- **Interactive Menu**: Select whether to process LXC containers, VMs, or both using a simple text-based interface.
-- **Public Key Input**: Enter your SSH public key via an easy-to-use input box.
-- **Optional Tool Installation**: Automatically installs `libguestfs-tools` for VM processing if required and approved by the user.
-- **Continues Processing**: Even if the tools are not installed, the script continues VM processing with limited functionality.
-- **Color-Coded Output**: Clear, color-coded logs for each operation (success, warning, or error).
+- **Interactive Selection**: Choose to process LXC containers, VMs, or both using a simple text-based interface.
+- **Tool Installation**: Automatically installs `libguestfs-tools` for VM processing, with a progress bar, if required.
+- **Instance Detection**: Checks for available LXC containers or VMs before processing and provides appropriate feedback.
+- **Public Key Input**: Prompts you to enter your SSH public key in a user-friendly way.
+- **Color-Coded Feedback**: Clear logs for each operation (success, warning, or error).
 
 ---
 
