@@ -7,35 +7,51 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No color
 
-# Prompt the user to paste their public key
-echo -e "${CYAN}Please paste your public SSH key (e.g., from ~/.ssh/id_rsa.pub), followed by [ENTER]:${NC}"
-read -r PUB_KEY
+# Check if whiptail is installed
+if ! command -v whiptail &> /dev/null; then
+    echo -e "${RED}Error: 'whiptail' is not installed. Installing it now...${NC}"
+    apt update && apt install -y whiptail
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to install 'whiptail'. Exiting.${NC}"
+        exit 1
+    fi
+fi
 
-# Check if the input is not empty
-if [[ -z "$PUB_KEY" ]]; then
-    echo -e "${RED}Error: No public key provided. Exiting.${NC}"
+# Multi-select for LXC and VM
+CHOICES=$(whiptail --title "Proxmox SSH Key Adder" --checklist \
+"Select the instances to process (use SPACE to select, ENTER to confirm):" 15 50 2 \
+"LXC" "Process LXC containers" ON \
+"VM" "Process VMs" OFF 3>&1 1>&2 2>&3)
+
+if [[ $? -ne 0 ]]; then
+    echo -e "${RED}No selection made. Exiting.${NC}"
     exit 1
 fi
 
-# Prompt to install libguestfs-tools if needed
-install_tools() {
-    echo -e "${YELLOW}Do you want to install 'libguestfs-tools' (required for proper VM processing)? [Y/n]${NC}"
-    read -r response
-    response=${response,,}  # Convert to lowercase
-    if [[ -z "$response" || "$response" == "y" || "$response" == "yes" ]]; then
+# Check if VM is selected, and prompt to install libguestfs-tools
+if [[ "$CHOICES" == *"VM"* ]]; then
+    if whiptail --title "Install libguestfs-tools" --yesno \
+"Do you want to install 'libguestfs-tools'? It is required for proper VM processing." 10 60; then
         echo -e "${CYAN}Installing 'libguestfs-tools'...${NC}"
         apt update && apt install -y libguestfs-tools
         if [[ $? -ne 0 ]]; then
             echo -e "${RED}Failed to install 'libguestfs-tools'. VM processing may encounter issues.${NC}"
-            return 1
+        else
+            echo -e "${GREEN}'libguestfs-tools' installed successfully.${NC}"
         fi
-        echo -e "${GREEN}'libguestfs-tools' installed successfully.${NC}"
-        return 0
+    else
+        echo -e "${YELLOW}Skipping installation of 'libguestfs-tools'.${NC}"
+        echo -e "${RED}VM processing will continue, but full functionality may not be available.${NC}"
     fi
+fi
 
-    echo -e "${RED}Skipping installation of 'libguestfs-tools'. Attempting to process VMs anyway.${NC}"
-    return 1
-}
+# Ask for the public key
+PUB_KEY=$(whiptail --title "SSH Public Key" --inputbox "Please paste your SSH public key:" 10 60 3>&1 1>&2 2>&3)
+
+if [[ -z "$PUB_KEY" ]]; then
+    echo -e "${RED}Error: No public key provided. Exiting.${NC}"
+    exit 1
+fi
 
 # Function to add SSH key to LXC container
 add_key_to_lxc() {
@@ -50,8 +66,7 @@ add_key_to_lxc() {
 add_key_to_vm() {
     local VMID=$1
     echo -e "${YELLOW}Adding key to VM $VMID...${NC}"
-
-    # Mount the VM disk to access its filesystem
+    
     DISK_PATH=$(qm config $VMID | grep '^scsi\|^virtio\|^ide' | head -1 | awk -F ':' '{print $2}' | awk '{print $1}')
     MOUNT_DIR="/mnt/vm-$VMID"
 
@@ -60,9 +75,8 @@ add_key_to_vm() {
         guestmount -a "/var/lib/vz/images/$VMID/$DISK_PATH" -i --ro $MOUNT_DIR 2>/dev/null
 
         if [[ $? -ne 0 ]]; then
-            echo -e "${RED}Failed to mount VM $VMID. Continuing without mounting.${NC}"
+            echo -e "${RED}Failed to mount VM $VMID. Skipping.${NC}"
         else
-            # Add public key if possible
             if [[ -d "$MOUNT_DIR/root/.ssh" ]]; then
                 echo "$PUB_KEY" >> "$MOUNT_DIR/root/.ssh/authorized_keys"
             else
@@ -72,26 +86,24 @@ add_key_to_vm() {
             guestunmount $MOUNT_DIR
             rmdir $MOUNT_DIR
             echo -e "${GREEN}Key added to VM $VMID.${NC}"
-            return
         fi
+    else
+        echo -e "${RED}No valid disk found for VM $VMID. Skipping.${NC}"
     fi
-
-    # If mounting fails, try a fallback approach
-    echo -e "${RED}Could not process VM $VMID. Consider installing 'libguestfs-tools'.${NC}"
 }
 
-# Check if libguestfs-tools is installed
-dpkg -l | grep -q libguestfs-tools || install_tools
-
-# Iterate through all LXC containers and VMs
-for ID in $(qm list | awk 'NR>1 {print $1}') $(pct list | awk 'NR>1 {print $1}'); do
-    if qm status $ID &>/dev/null; then
-        add_key_to_vm $ID
-    elif pct status $ID &>/dev/null; then
+# Process LXC if selected
+if [[ "$CHOICES" == *"LXC"* ]]; then
+    for ID in $(pct list | awk 'NR>1 {print $1}'); do
         add_key_to_lxc $ID
-    else
-        echo -e "${RED}Unknown type for ID $ID. Skipping.${NC}"
-    fi
-done
+    done
+fi
 
-echo -e "${CYAN}Public key added to all instances.${NC}"
+# Process VM if selected
+if [[ "$CHOICES" == *"VM"* ]]; then
+    for ID in $(qm list | awk 'NR>1 {print $1}'); do
+        add_key_to_vm $ID
+    done
+fi
+
+echo -e "${CYAN}Public key added to selected instances.${NC}"
