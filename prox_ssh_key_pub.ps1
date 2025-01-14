@@ -14,16 +14,16 @@ function Write-Color {
     Write-Host $Text -ForegroundColor $Colors[$Color]
 }
 
-# Check if the SSH public key exists on the laptop
+# Check if the SSH public key exists on the win
 $PublicKeyPath = "$HOME\.ssh\id_rsa.pub"
 if (!(Test-Path $PublicKeyPath)) {
     Write-Color "Error: No SSH public key found at $PublicKeyPath. Please generate one before running this script." "Red"
     exit
 }
 
-# Load the public key from the laptop
+# Load the public key form win
 $PublicKey = Get-Content $PublicKeyPath
-Write-Color "Public key successfully loaded from your laptop." "Green"
+Write-Color "Public key successfully loaded." "Green"
 
 # Prompt for the Proxmox server IP or hostname
 $ProxmoxHost = Read-Host "Enter the IP or hostname of your Proxmox server"
