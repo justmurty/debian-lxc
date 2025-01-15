@@ -21,9 +21,10 @@ if (!(Test-Path $PublicKeyPath)) {
     exit
 }
 
-# Load the SSH public key
+# Load the SSH public key and normalize it
 $PublicKey = Get-Content $PublicKeyPath -Raw
-Write-Color "Public key successfully loaded." "Green"
+$EscapedPublicKey = $PublicKey -replace "`r`n", "`n" -replace "`n", ""
+Write-Color "Public key successfully loaded and normalized." "Green"
 
 # Get Proxmox connection details
 $ProxmoxHost = Read-Host "Enter the IP or hostname of your Proxmox server"
@@ -32,7 +33,7 @@ $ProxmoxUser = Read-Host "Enter your Proxmox username (e.g., root)"
 # Manually copy the SSH public key
 Write-Color "Copying public key to Proxmox ($ProxmoxUser@$ProxmoxHost)..." "Cyan"
 try {
-    $Command = "echo '$PublicKey' | ssh $ProxmoxUser@$ProxmoxHost 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh'"
+    $Command = "echo '$EscapedPublicKey' | ssh $ProxmoxUser@$ProxmoxHost 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh'"
     Invoke-Expression $Command
     Write-Color "Public key successfully copied to Proxmox." "Green"
 } catch {
@@ -42,9 +43,9 @@ try {
 }
 
 # Send the public key to ln.sh and execute it
-$RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm '$PublicKey'"
 Write-Color "Executing the script on Proxmox..." "Yellow"
 try {
+    $RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm `"$EscapedPublicKey`""
     $sshCommand = "ssh -t $ProxmoxUser@$ProxmoxHost `"$RemoteCommand`""
     Invoke-Expression $sshCommand
     Write-Color "Script executed successfully on Proxmox." "Green"
