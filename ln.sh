@@ -34,13 +34,14 @@ if [[ -z "$PUB_KEY" ]]; then
     echo -e "${RED}Error: No SSH public key provided.${NC}"
     exit 1
 fi
-echo -e "${CYAN}Normalized Public Key:${NC} $PUB_KEY"
+echo -e "${CYAN}Received Public Key:${NC} $PUB_KEY"
 
-# Function to clean up public key (normalize it)
+# Function to clean up and normalize the public key
 normalize_key() {
     echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
 }
 PUB_KEY=$(normalize_key "$PUB_KEY")
+echo -e "${CYAN}Normalized Public Key:${NC} $PUB_KEY"
 
 # Function to add the key to an LXC container
 add_key_to_lxc() {
@@ -84,6 +85,12 @@ add_key_to_vm() {
         return
     fi
 
+    # Check if the VM is Windows
+    if $SUDO qm config "$id" | grep -iq "ostype.*win"; then
+        echo -e "${YELLOW}Skipping VM $id (Windows detected).${NC}"
+        return
+    fi
+
     echo -e "${CYAN}Checking existing keys in VM $id...${NC}"
     disk_path=$($SUDO qm config "$id" | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
 
@@ -99,7 +106,7 @@ add_key_to_vm() {
         fi
 
         echo -e "${CYAN}Adding SSH key to VM $id...${NC}"
-        echo "$PUB_KEY" | $SUDO tee -a "$mount_dir/root/.ssh/authorized_keys"
+        echo "$PUB_KEY" | $SUDO tee -a "$mount_dir/root/.ssh/authorized_keys" >/dev/null
         $SUDO guestunmount "$mount_dir"
         $SUDO rmdir "$mount_dir"
         echo -e "${GREEN}SSH key added to VM $id.${NC}"
