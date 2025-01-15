@@ -15,132 +15,95 @@ else
     SUDO=''
 fi
 
-# Install whiptail if missing
-if ! command -v whiptail &> /dev/null; then
-    echo -e "${YELLOW}Installing whiptail...${NC}"
-    $SUDO apt update -y && $SUDO apt install -y whiptail
-fi
-
-# Parse arguments for non-interactive mode
-PROCESS_LXC=false
-PROCESS_VM=false
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --lxc)
-            PROCESS_LXC=true
-            shift
-            ;;
-        --vm)
-            PROCESS_VM=true
-            shift
-            ;;
-        *)
-            echo -e "${RED}Unknown option: $1${NC}"
-            exit 1
-            ;;
-    esac
-done
-
-# Interactive mode fallback if no arguments are provided
-if [[ "$PROCESS_LXC" == false && "$PROCESS_VM" == false ]]; then
-    if [[ ! -t 1 ]]; then
-        echo -e "${YELLOW}Non-interactive mode detected but no options provided. Defaulting to process all.${NC}"
-        PROCESS_LXC=true
-        PROCESS_VM=true
-    else
-        CHOICES=$(whiptail --title "Proxmox SSH Key Adder" --checklist \
-        "Select instances to process (use SPACE to select, ENTER to confirm):" 15 50 2 \
-        "LXC" "Process LXC containers" ON \
-        "VM" "Process VMs" OFF 3>&1 1>&2 2>&3)
-
-        if [[ $? -ne 0 ]]; then
-            echo -e "${RED}No selection made. Exiting.${NC}"
-            exit 1
-        fi
-
-        if [[ "$CHOICES" == *"LXC"* ]]; then
-            PROCESS_LXC=true
-        fi
-        if [[ "$CHOICES" == *"VM"* ]]; then
-            PROCESS_VM=true
-        fi
-    fi
-fi
+# Function to clean and normalize a key
+normalize_key() {
+    echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
+}
 
 # Load the SSH public key
-PUB_KEY=$(cat ~/.ssh/authorized_keys)
+PUB_KEY=$(normalize_key "$(cat ~/.ssh/id_rsa.pub)")
 
-# Check and Add Key to LXC
+# Add key to LXC containers
+add_key_to_lxc() {
+    local id=$1
+    local status
+
+    status=$($SUDO pct status "$id" | awk '{print $2}')
+    if [[ "$status" != "running" ]]; then
+        echo -e "${YELLOW}Skipping LXC container $id (not running).${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}Checking existing keys in LXC container $id...${NC}"
+    existing_keys=$($SUDO pct exec "$id" -- cat /root/.ssh/authorized_keys 2>/dev/null || echo "")
+
+    if echo "$existing_keys" | grep -Fxq "$(normalize_key "$PUB_KEY")"; then
+        echo -e "${YELLOW}Key already exists in LXC container $id. Skipping.${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}Adding SSH key to LXC container $id...${NC}"
+    $SUDO pct exec "$id" -- mkdir -p /root/.ssh
+    echo "$PUB_KEY" | $SUDO pct exec "$id" -- bash -c "cat >> /root/.ssh/authorized_keys"
+    echo -e "${GREEN}SSH key added to LXC container $id.${NC}"
+}
+
+# Add key to VMs
+add_key_to_vm() {
+    local id=$1
+    local disk_path
+    local mount_dir="/mnt/vm-$id"
+    local status
+
+    status=$($SUDO qm status "$id" | awk '{print $2}')
+    if [[ "$status" != "running" ]]; then
+        echo -e "${YELLOW}Skipping VM $id (not running).${NC}"
+        return
+    fi
+
+    # Detect Windows VMs and skip
+    if $SUDO qm config "$id" | grep -i "ostype" | grep -iq "win"; then
+        echo -e "${YELLOW}Skipping VM $id (Windows detected).${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}Checking existing keys in VM $id...${NC}"
+    disk_path=$($SUDO qm config "$id" | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
+
+    $SUDO mkdir -p "$mount_dir"
+    if $SUDO guestmount -a "/var/lib/vz/images/$id/$disk_path" -i --rw "$mount_dir"; then
+        existing_keys=$(cat "$mount_dir/root/.ssh/authorized_keys" 2>/dev/null || echo "")
+
+        if echo "$existing_keys" | grep -Fxq "$(normalize_key "$PUB_KEY")"; then
+            echo -e "${YELLOW}Key already exists in VM $id. Skipping.${NC}"
+            $SUDO guestunmount "$mount_dir"
+            $SUDO rmdir "$mount_dir"
+            return
+        fi
+
+        echo -e "${CYAN}Adding SSH key to VM $id...${NC}"
+        echo "$PUB_KEY" | $SUDO tee -a "$mount_dir/root/.ssh/authorized_keys"
+        $SUDO guestunmount "$mount_dir"
+        $SUDO rmdir "$mount_dir"
+        echo -e "${GREEN}SSH key added to VM $id.${NC}"
+    else
+        echo -e "${RED}Failed to mount disk for VM $id. Skipping.${NC}"
+        $SUDO rmdir "$mount_dir"
+    fi
+}
+
+# Process LXC containers
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
-    if [[ -z "$LXC_IDS" ]]; then
-        echo -e "${YELLOW}No LXC containers found.${NC}"
-    else
-        for ID in $LXC_IDS; do
-            STATUS=$($SUDO pct status $ID | awk '{print $2}')
-            if [[ "$STATUS" != "running" ]]; then
-                echo -e "${YELLOW}Skipping LXC container $ID (not running).${NC}"
-                continue
-            fi
-
-            echo -e "${CYAN}Checking existing keys in LXC container $ID...${NC}"
-            EXISTING_KEYS=$($SUDO pct exec $ID -- cat /root/.ssh/authorized_keys 2>/dev/null || echo "")
-            if echo "$EXISTING_KEYS" | grep -Fxq "$PUB_KEY"; then
-                echo -e "${YELLOW}Key already exists in LXC container $ID. Skipping.${NC}"
-                continue
-            fi
-
-            echo -e "${CYAN}Adding SSH key to LXC container $ID...${NC}"
-            $SUDO pct exec $ID -- mkdir -p /root/.ssh
-            echo "$PUB_KEY" | $SUDO pct exec $ID -- bash -c "cat >> /root/.ssh/authorized_keys"
-            echo -e "${GREEN}SSH key added to LXC container $ID.${NC}"
-        done
-    fi
+    for id in $LXC_IDS; do
+        add_key_to_lxc "$id"
+    done
 fi
 
-# Check and Add Key to VMs
+# Process VMs
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
-    if [[ -z "$VM_IDS" ]]; then
-        echo -e "${YELLOW}No VMs found.${NC}"
-    else
-        for ID in $VM_IDS; do
-            STATUS=$($SUDO qm status $ID | awk '{print $2}')
-            if [[ "$STATUS" != "running" ]]; then
-                echo -e "${YELLOW}Skipping VM $ID (not running).${NC}"
-                continue
-            fi
-
-            # Check if the VM is running Windows
-            OS_TYPE=$($SUDO qm config $ID | grep -i "ostype" | awk '{print $2}')
-            if [[ "$OS_TYPE" == *"win"* ]]; then
-                echo -e "${YELLOW}Skipping VM $ID (Windows detected).${NC}"
-                continue
-            fi
-
-            echo -e "${CYAN}Checking existing keys in VM $ID...${NC}"
-            DISK_PATH=$($SUDO qm config $ID | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
-            MOUNT_DIR="/mnt/vm-$ID"
-            $SUDO mkdir -p $MOUNT_DIR
-            if $SUDO guestmount -a "/var/lib/vz/images/$ID/$DISK_PATH" -i --rw $MOUNT_DIR; then
-                EXISTING_KEYS=$(cat "$MOUNT_DIR/root/.ssh/authorized_keys" 2>/dev/null || echo "")
-                if echo "$EXISTING_KEYS" | grep -Fxq "$PUB_KEY"; then
-                    echo -e "${YELLOW}Key already exists in VM $ID. Skipping.${NC}"
-                    $SUDO guestunmount $MOUNT_DIR
-                    $SUDO rmdir $MOUNT_DIR
-                    continue
-                fi
-
-                echo -e "${CYAN}Adding SSH key to VM $ID...${NC}"
-                echo "$PUB_KEY" | $SUDO tee -a "$MOUNT_DIR/root/.ssh/authorized_keys"
-                $SUDO guestunmount $MOUNT_DIR
-                $SUDO rmdir $MOUNT_DIR
-                echo -e "${GREEN}SSH key added to VM $ID.${NC}"
-            else
-                echo -e "${RED}Failed to mount disk for VM $ID. Skipping.${NC}"
-                $SUDO rmdir $MOUNT_DIR
-            fi
-        done
-    fi
+    for id in $VM_IDS; do
+        add_key_to_vm "$id"
+    done
 fi
-
