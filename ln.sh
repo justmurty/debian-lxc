@@ -5,7 +5,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
-NC='\033[0m'
+NC='\033[0m'  # No Color
 
 # Ensure root privileges
 if [[ $EUID -ne 0 ]]; then
@@ -49,13 +49,13 @@ PUB_KEY=$(normalize_key "$PUB_KEY")
 # Display the key being processed
 echo -e "${CYAN}SSH Public Key being processed:${NC} $PUB_KEY"
 
-# Progress bar function
+# Function to display a colored progress bar
 show_progress() {
     local current=$1
     local total=$2
     local progress=$((current * 100 / total))
     local bars=$((progress / 5))
-    printf "\r[%-20s] %d%%" $(printf '=%.0s' $(seq 1 $bars)) $progress
+    printf "\r${CYAN}[${GREEN}%-20s${CYAN}] %s${NC}" $(printf '=%.0s' $(seq 1 $bars)) "$progress%"
 }
 
 # Logging for skipped IDs
