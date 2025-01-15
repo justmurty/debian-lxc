@@ -137,7 +137,7 @@ if [[ "$PROCESS_LXC" == true ]]; then
             ((count++))
             show_progress $count $total
         done
-        echo
+        echo -ne "\r" # Finalize the progress bar on the same line
     fi
 fi
 
@@ -154,7 +154,7 @@ if [[ "$PROCESS_VM" == true ]]; then
             ((count++))
             show_progress $count $total
         done
-        echo
+        echo -ne "\r" # Finalize the progress bar on the same line
     fi
 fi
 
