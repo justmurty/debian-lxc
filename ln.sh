@@ -99,17 +99,25 @@ add_key_to_vm() {
 # Process LXC containers if requested
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
-    for id in $LXC_IDS; do
-        add_key_to_lxc "$id"
-    done
+    if [[ -z "$LXC_IDS" ]]; then
+        echo -e "${YELLOW}No LXC containers found.${NC}"
+    else
+        for id in $LXC_IDS; do
+            add_key_to_lxc "$id"
+        done
+    fi
 fi
 
 # Process VMs if requested
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
-    for id in $VM_IDS; do
-        add_key_to_vm "$id"
-    done
+    if [[ -z "$VM_IDS" ]]; then
+        echo -e "${YELLOW}No VMs found.${NC}"
+    else
+        for id in $VM_IDS; do
+            add_key_to_vm "$id"
+        done
+    fi
 fi
 
 echo -e "${GREEN}SSH key processed for all specified containers and VMs.${NC}"
