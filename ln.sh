@@ -22,11 +22,20 @@ normalize_key() {
 
 # Load the SSH public key
 PUB_KEY=$(normalize_key "$(cat ~/.ssh/id_rsa.pub)")
+echo -e "${CYAN}Normalized Public Key:${NC} $PUB_KEY"
+
+# Debugging: function to show processing logs
+debug_log() {
+    local message=$1
+    echo -e "${CYAN}[DEBUG]: $message${NC}"
+}
 
 # Add key to LXC containers
 add_key_to_lxc() {
     local id=$1
     local status
+
+    debug_log "Processing LXC container ID: $id"
 
     status=$($SUDO pct status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
@@ -36,6 +45,7 @@ add_key_to_lxc() {
 
     echo -e "${CYAN}Checking existing keys in LXC container $id...${NC}"
     existing_keys=$($SUDO pct exec "$id" -- cat /root/.ssh/authorized_keys 2>/dev/null || echo "")
+    echo -e "${CYAN}Existing Keys in $id:${NC}\n$existing_keys"
 
     if echo "$existing_keys" | grep -Fxq "$(normalize_key "$PUB_KEY")"; then
         echo -e "${YELLOW}Key already exists in LXC container $id. Skipping.${NC}"
@@ -55,6 +65,8 @@ add_key_to_vm() {
     local mount_dir="/mnt/vm-$id"
     local status
 
+    debug_log "Processing VM ID: $id"
+
     status=$($SUDO qm status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
         echo -e "${YELLOW}Skipping VM $id (not running).${NC}"
@@ -69,10 +81,12 @@ add_key_to_vm() {
 
     echo -e "${CYAN}Checking existing keys in VM $id...${NC}"
     disk_path=$($SUDO qm config "$id" | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
+    echo -e "${CYAN}Disk Path for VM $id:${NC} $disk_path"
 
     $SUDO mkdir -p "$mount_dir"
     if $SUDO guestmount -a "/var/lib/vz/images/$id/$disk_path" -i --rw "$mount_dir"; then
         existing_keys=$(cat "$mount_dir/root/.ssh/authorized_keys" 2>/dev/null || echo "")
+        echo -e "${CYAN}Existing Keys in VM $id:${NC}\n$existing_keys"
 
         if echo "$existing_keys" | grep -Fxq "$(normalize_key "$PUB_KEY")"; then
             echo -e "${YELLOW}Key already exists in VM $id. Skipping.${NC}"
