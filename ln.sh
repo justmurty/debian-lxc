@@ -102,6 +102,14 @@ if [[ "$PROCESS_VM" == true ]]; then
                 echo -e "${YELLOW}Skipping VM $ID (not running).${NC}"
                 continue
             fi
+
+            # Check if the VM is running Windows
+            OS_TYPE=$($SUDO qm config $ID | grep -i "ostype" | awk '{print $2}')
+            if [[ "$OS_TYPE" == *"win"* ]]; then
+                echo -e "${YELLOW}Skipping VM $ID (Windows detected).${NC}"
+                continue
+            fi
+
             echo -e "${CYAN}Adding SSH key to VM $ID...${NC}"
             DISK_PATH=$($SUDO qm config $ID | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
             MOUNT_DIR="/mnt/vm-$ID"
