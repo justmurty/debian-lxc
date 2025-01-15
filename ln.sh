@@ -22,7 +22,7 @@ PROCESS_VM=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --lxc) PROCESS_LXC=true ;;
-        --vm) PROCESS_VM=true ;;
+        --vm) PROCESS_VM true ;;
         *) ENCODED_KEY="$1" ;;
     esac
     shift
@@ -55,7 +55,10 @@ show_progress() {
     local total=$2
     local progress=$((current * 100 / total))
     local bars=$((progress / 5))
-    printf "\r${CYAN}[${GREEN}%-20s${CYAN}] %s${NC}" $(printf '=%.0s' $(seq 1 $bars)) "$progress%"
+    printf "\r${CYAN}[${GREEN}%-20s${CYAN}] %s%%${NC}" $(printf '=%.0s' $(seq 1 $bars)) "$progress"
+    if [[ $progress -eq 100 ]]; then
+        echo -ne "\r"
+    fi
 }
 
 # Logging for skipped IDs
@@ -157,7 +160,7 @@ fi
 
 # Show skipped logs
 if [[ ${#skipped_logs[@]} -gt 0 ]]; then
-    echo -e "${YELLOW}Skipped IDs:${NC}"
+    echo -e "\n${YELLOW}Skipped IDs:${NC}"
     for log in "${skipped_logs[@]}"; do
         echo -e "${RED}$log${NC}"
     done
