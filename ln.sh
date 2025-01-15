@@ -21,22 +21,57 @@ if ! command -v whiptail &> /dev/null; then
     $SUDO apt update -y && $SUDO apt install -y whiptail
 fi
 
-# Whiptail menu for instance selection
-CHOICES=$(whiptail --title "Proxmox SSH Key Adder" --checklist \
-"Select instances to process (use SPACE to select, ENTER to confirm):" 15 50 2 \
-"LXC" "Process LXC containers" ON \
-"VM" "Process VMs" OFF 3>&1 1>&2 2>&3)
+# Parse arguments for non-interactive mode
+PROCESS_LXC=false
+PROCESS_VM=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --lxc)
+            PROCESS_LXC=true
+            shift
+            ;;
+        --vm)
+            PROCESS_VM=true
+            shift
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            exit 1
+            ;;
+    esac
+done
 
-if [[ $? -ne 0 ]]; then
-    echo -e "${RED}No selection made. Exiting.${NC}"
-    exit 1
+# Interactive mode fallback if no arguments are provided
+if [[ "$PROCESS_LXC" == false && "$PROCESS_VM" == false ]]; then
+    if [[ ! -t 1 ]]; then
+        echo -e "${YELLOW}Non-interactive mode detected but no options provided. Defaulting to process all.${NC}"
+        PROCESS_LXC=true
+        PROCESS_VM=true
+    else
+        CHOICES=$(whiptail --title "Proxmox SSH Key Adder" --checklist \
+        "Select instances to process (use SPACE to select, ENTER to confirm):" 15 50 2 \
+        "LXC" "Process LXC containers" ON \
+        "VM" "Process VMs" OFF 3>&1 1>&2 2>&3)
+
+        if [[ $? -ne 0 ]]; then
+            echo -e "${RED}No selection made. Exiting.${NC}"
+            exit 1
+        fi
+
+        if [[ "$CHOICES" == *"LXC"* ]]; then
+            PROCESS_LXC=true
+        fi
+        if [[ "$CHOICES" == *"VM"* ]]; then
+            PROCESS_VM=true
+        fi
+    fi
 fi
 
 # Load the SSH public key
 PUB_KEY=$(cat ~/.ssh/authorized_keys)
 
 # Add key to LXC containers
-if [[ $CHOICES == *"LXC"* ]]; then
+if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
     if [[ -z "$LXC_IDS" ]]; then
         echo -e "${YELLOW}No LXC containers found.${NC}"
@@ -51,7 +86,7 @@ if [[ $CHOICES == *"LXC"* ]]; then
 fi
 
 # Add key to VMs
-if [[ $CHOICES == *"VM"* ]]; then
+if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
     if [[ -z "$VM_IDS" ]]; then
         echo -e "${YELLOW}No VMs found.${NC}"
