@@ -22,7 +22,7 @@ PROCESS_VM=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --lxc) PROCESS_LXC=true ;;
-        --vm) PROCESS_VM true ;;
+        --vm) PROCESS_VM=true ;;
         *) ENCODED_KEY="$1" ;;
     esac
     shift
