@@ -34,9 +34,10 @@ if [[ -z "$PUB_KEY" ]]; then
     echo -e "${RED}Error: No SSH public key provided.${NC}"
     exit 1
 fi
-echo -e "${CYAN}Received Public Key:${NC} $PUB_KEY"
+echo -e "${CYAN}Received Raw Public Key:${NC}"
+echo "$PUB_KEY"
 
-# Function to clean up and normalize the public key
+# Normalize the public key
 normalize_key() {
     echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
 }
