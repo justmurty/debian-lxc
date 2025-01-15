@@ -15,18 +15,39 @@ else
     SUDO=''
 fi
 
-# Get the SSH public key from the argument
-if [[ -z "$1" ]]; then
+# Parse arguments for SSH public key and processing flags
+PUB_KEY=""
+PROCESS_LXC=false
+PROCESS_VM=false
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --lxc) PROCESS_LXC=true ;;
+        --vm) PROCESS_VM=true ;;
+        *) PUB_KEY="$1" ;;
+    esac
+    shift
+done
+
+# Validate the SSH public key
+if [[ -z "$PUB_KEY" ]]; then
     echo -e "${RED}Error: No SSH public key provided.${NC}"
     exit 1
 fi
-PUB_KEY="$1"
 echo -e "${CYAN}Normalized Public Key:${NC} $PUB_KEY"
 
-# Add key to LXC containers
+# Function to clean up public key (normalize it)
+normalize_key() {
+    echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
+}
+PUB_KEY=$(normalize_key "$PUB_KEY")
+
+# Function to add the key to an LXC container
 add_key_to_lxc() {
     local id=$1
     local status
+
+    echo -e "${CYAN}Processing LXC container ID: $id...${NC}"
 
     status=$($SUDO pct status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
@@ -48,12 +69,14 @@ add_key_to_lxc() {
     echo -e "${GREEN}SSH key added to LXC container $id.${NC}"
 }
 
-# Add key to VMs
+# Function to add the key to a VM
 add_key_to_vm() {
     local id=$1
     local disk_path
     local mount_dir="/mnt/vm-$id"
     local status
+
+    echo -e "${CYAN}Processing VM ID: $id...${NC}"
 
     status=$($SUDO qm status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
@@ -86,18 +109,28 @@ add_key_to_vm() {
     fi
 }
 
-# Process LXC containers
+# Process LXC containers if requested
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
-    for id in $LXC_IDS; do
-        add_key_to_lxc "$id"
-    done
+    if [[ -z "$LXC_IDS" ]]; then
+        echo -e "${YELLOW}No LXC containers found.${NC}"
+    else
+        for id in $LXC_IDS; do
+            add_key_to_lxc "$id"
+        done
+    fi
 fi
 
-# Process VMs
+# Process VMs if requested
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
-    for id in $VM_IDS; do
-        add_key_to_vm "$id"
-    done
+    if [[ -z "$VM_IDS" ]]; then
+        echo -e "${YELLOW}No VMs found.${NC}"
+    else
+        for id in $VM_IDS; do
+            add_key_to_vm "$id"
+        done
+    fi
 fi
+
+echo -e "${GREEN}All specified containers and VMs have been processed.${NC}"
