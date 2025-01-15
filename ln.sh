@@ -70,7 +70,7 @@ fi
 # Load the SSH public key
 PUB_KEY=$(cat ~/.ssh/authorized_keys)
 
-# Add key to LXC containers
+# Check and Add Key to LXC
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
     if [[ -z "$LXC_IDS" ]]; then
@@ -98,7 +98,7 @@ if [[ "$PROCESS_LXC" == true ]]; then
     fi
 fi
 
-# Add key to VMs
+# Check and Add Key to VMs
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
     if [[ -z "$VM_IDS" ]]; then
@@ -143,3 +143,4 @@ if [[ "$PROCESS_VM" == true ]]; then
         done
     fi
 fi
+
