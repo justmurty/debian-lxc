@@ -10,7 +10,6 @@ NC='\033[0m'
 # Ensure root privileges
 if [[ $EUID -ne 0 ]]; then
     SUDO='sudo'
-    echo -e "${YELLOW}Running as non-root user. Using sudo.${NC}"
 else
     SUDO=''
 fi
@@ -35,47 +34,37 @@ if [[ -z "$ENCODED_KEY" ]]; then
     exit 1
 fi
 
-PUB_KEY=$(echo "$ENCODED_KEY" | base64 -d)
+PUB_KEY=$(echo "$ENCODED_KEY" | base64 -d 2>/dev/null)
 if [[ -z "$PUB_KEY" ]]; then
     echo -e "${RED}Error: Decoded public key is empty or invalid.${NC}"
     exit 1
 fi
 
-echo -e "${CYAN}Decoded Public Key:${NC}"
-echo "$PUB_KEY"
-
-# Normalize the public key for processing
+# Normalize the public key
 normalize_key() {
     echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
 }
 PUB_KEY=$(normalize_key "$PUB_KEY")
-echo -e "${CYAN}Normalized Public Key:${NC} $PUB_KEY"
+
+# Display the key being processed
+echo -e "${CYAN}SSH Public Key being processed:${NC} $PUB_KEY"
 
 # Function to add the key to an LXC container
 add_key_to_lxc() {
     local id=$1
     local status
 
-    echo -e "${CYAN}Processing LXC container ID: $id...${NC}"
-
     status=$($SUDO pct status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
-        echo -e "${YELLOW}Skipping LXC container $id (not running).${NC}"
         return
     fi
 
-    echo -e "${CYAN}Checking existing keys in LXC container $id...${NC}"
     existing_keys=$($SUDO pct exec "$id" -- cat /root/.ssh/authorized_keys 2>/dev/null || echo "")
 
-    if echo "$existing_keys" | grep -Fxq "$PUB_KEY"; then
-        echo -e "${YELLOW}Key already exists in LXC container $id. Skipping.${NC}"
-        return
+    if ! echo "$existing_keys" | grep -Fxq "$PUB_KEY"; then
+        $SUDO pct exec "$id" -- mkdir -p /root/.ssh
+        echo "$PUB_KEY" | $SUDO pct exec "$id" -- bash -c "cat >> /root/.ssh/authorized_keys"
     fi
-
-    echo -e "${CYAN}Adding SSH key to LXC container $id...${NC}"
-    $SUDO pct exec "$id" -- mkdir -p /root/.ssh
-    echo "$PUB_KEY" | $SUDO pct exec "$id" -- bash -c "cat >> /root/.ssh/authorized_keys"
-    echo -e "${GREEN}SSH key added to LXC container $id.${NC}"
 }
 
 # Function to add the key to a VM
@@ -85,41 +74,24 @@ add_key_to_vm() {
     local mount_dir="/mnt/vm-$id"
     local status
 
-    echo -e "${CYAN}Processing VM ID: $id...${NC}"
-
     status=$($SUDO qm status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
-        echo -e "${YELLOW}Skipping VM $id (not running).${NC}"
         return
     fi
 
-    # Check if the VM is Windows
-    if $SUDO qm config "$id" | grep -iq "ostype.*win"; then
-        echo -e "${YELLOW}Skipping VM $id (Windows detected).${NC}"
-        return
-    fi
-
-    echo -e "${CYAN}Checking existing keys in VM $id...${NC}"
     disk_path=$($SUDO qm config "$id" | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
 
     $SUDO mkdir -p "$mount_dir"
     if $SUDO guestmount -a "/var/lib/vz/images/$id/$disk_path" -i --rw "$mount_dir"; then
         existing_keys=$(cat "$mount_dir/root/.ssh/authorized_keys" 2>/dev/null || echo "")
 
-        if echo "$existing_keys" | grep -Fxq "$PUB_KEY"; then
-            echo -e "${YELLOW}Key already exists in VM $id. Skipping.${NC}"
-            $SUDO guestunmount "$mount_dir"
-            $SUDO rmdir "$mount_dir"
-            return
+        if ! echo "$existing_keys" | grep -Fxq "$PUB_KEY"; then
+            echo "$PUB_KEY" | $SUDO tee -a "$mount_dir/root/.ssh/authorized_keys" >/dev/null
         fi
 
-        echo -e "${CYAN}Adding SSH key to VM $id...${NC}"
-        echo "$PUB_KEY" | $SUDO tee -a "$mount_dir/root/.ssh/authorized_keys" >/dev/null
         $SUDO guestunmount "$mount_dir"
         $SUDO rmdir "$mount_dir"
-        echo -e "${GREEN}SSH key added to VM $id.${NC}"
     else
-        echo -e "${RED}Failed to mount disk for VM $id. Skipping.${NC}"
         $SUDO rmdir "$mount_dir"
     fi
 }
@@ -127,25 +99,17 @@ add_key_to_vm() {
 # Process LXC containers if requested
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
-    if [[ -z "$LXC_IDS" ]]; then
-        echo -e "${YELLOW}No LXC containers found.${NC}"
-    else
-        for id in $LXC_IDS; do
-            add_key_to_lxc "$id"
-        done
-    fi
+    for id in $LXC_IDS; do
+        add_key_to_lxc "$id"
+    done
 fi
 
 # Process VMs if requested
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
-    if [[ -z "$VM_IDS" ]]; then
-        echo -e "${YELLOW}No VMs found.${NC}"
-    else
-        for id in $VM_IDS; do
-            add_key_to_vm "$id"
-        done
-    fi
+    for id in $VM_IDS; do
+        add_key_to_vm "$id"
+    done
 fi
 
-echo -e "${GREEN}All specified containers and VMs have been processed.${NC}"
+echo -e "${GREEN}SSH key processed for all specified containers and VMs.${NC}"
