@@ -23,7 +23,7 @@ if (!(Test-Path $PublicKeyPath)) {
 
 # Load the SSH public key and normalize it
 $PublicKey = Get-Content $PublicKeyPath -Raw
-$EscapedPublicKey = $PublicKey -replace "`r`n", "`n" -replace "`n", ""
+$EscapedPublicKey = $PublicKey -replace "`r`n", "" -replace "`n", "" -replace "'", "\'" -replace "`"", "\""
 Write-Color "Public key successfully loaded and normalized." "Green"
 
 # Get Proxmox connection details
@@ -45,7 +45,7 @@ try {
 # Send the public key to ln.sh and execute it
 Write-Color "Executing the script on Proxmox..." "Yellow"
 try {
-    $RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm `"$EscapedPublicKey`""
+    $RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm '$EscapedPublicKey'"
     $sshCommand = "ssh -t $ProxmoxUser@$ProxmoxHost `"$RemoteCommand`""
     Invoke-Expression $sshCommand
     Write-Color "Script executed successfully on Proxmox." "Green"
