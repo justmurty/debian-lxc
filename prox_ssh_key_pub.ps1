@@ -23,8 +23,8 @@ if (!(Test-Path $PublicKeyPath)) {
 
 # Load the SSH public key and normalize it
 $PublicKey = Get-Content $PublicKeyPath -Raw
-$EscapedPublicKey = $PublicKey -replace "`r`n", "" -replace "`n", "" -replace "'", "\'" -replace "`"", "\""
-Write-Color "Public key successfully loaded and normalized." "Green"
+Write-Color "Raw Public Key loaded from file." "Green"
+$EscapedPublicKey = $PublicKey -replace "`r`n", "" -replace "`n", "" -replace "`"","`"" -replace "'", "\'"
 
 # Get Proxmox connection details
 $ProxmoxHost = Read-Host "Enter the IP or hostname of your Proxmox server"
@@ -45,7 +45,9 @@ try {
 # Send the public key to ln.sh and execute it
 Write-Color "Executing the script on Proxmox..." "Yellow"
 try {
-    $RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm '$EscapedPublicKey'"
+    # Use base64 encoding to ensure the key is passed correctly
+    $EncodedKey = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($EscapedPublicKey))
+    $RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm `"$EncodedKey`""
     $sshCommand = "ssh -t $ProxmoxUser@$ProxmoxHost `"$RemoteCommand`""
     Invoke-Expression $sshCommand
     Write-Color "Script executed successfully on Proxmox." "Green"
