@@ -43,11 +43,12 @@ try {
 }
 
 # Execute the Bash script from GitHub
-$RemoteCommand = "bash -c (wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh)"
+$RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash"
 
 Write-Color "Executing the script on Proxmox..." "Yellow"
 try {
-    Invoke-Expression "ssh $ProxmoxUser@$ProxmoxHost \"$RemoteCommand\""
+    $sshCommand = "ssh $ProxmoxUser@$ProxmoxHost `"$RemoteCommand`""
+    Invoke-Expression $sshCommand
     Write-Color "Script executed successfully on Proxmox." "Green"
 } catch {
     Write-Color "Error: Failed to execute the script on Proxmox." "Red"
