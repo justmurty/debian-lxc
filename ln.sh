@@ -49,6 +49,15 @@ PUB_KEY=$(normalize_key "$PUB_KEY")
 # Display the key being processed
 echo -e "${CYAN}SSH Public Key being processed:${NC} $PUB_KEY"
 
+# Progress bar function
+show_progress() {
+    local current=$1
+    local total=$2
+    local progress=$((current * 100 / total))
+    local bars=$((progress / 5))
+    printf "\r[%-20s] %d%%" $(printf '=%.0s' $(seq 1 $bars)) $progress
+}
+
 # Function to add the key to an LXC container
 add_key_to_lxc() {
     local id=$1
@@ -99,24 +108,34 @@ add_key_to_vm() {
 # Process LXC containers if requested
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
+    total=$(echo "$LXC_IDS" | wc -w)
     if [[ -z "$LXC_IDS" ]]; then
         echo -e "${YELLOW}No LXC containers found.${NC}"
     else
+        count=0
         for id in $LXC_IDS; do
             add_key_to_lxc "$id"
+            ((count++))
+            show_progress $count $total
         done
+        echo
     fi
 fi
 
 # Process VMs if requested
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
+    total=$(echo "$VM_IDS" | wc -w)
     if [[ -z "$VM_IDS" ]]; then
         echo -e "${YELLOW}No VMs found.${NC}"
     else
+        count=0
         for id in $VM_IDS; do
             add_key_to_vm "$id"
+            ((count++))
+            show_progress $count $total
         done
+        echo
     fi
 fi
 
