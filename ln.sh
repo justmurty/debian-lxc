@@ -15,27 +15,18 @@ else
     SUDO=''
 fi
 
-# Function to clean and normalize a key
-normalize_key() {
-    echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
-}
-
-# Load the SSH public key
-PUB_KEY=$(normalize_key "$(cat ~/.ssh/id_rsa.pub)")
+# Get the SSH public key from the argument
+if [[ -z "$1" ]]; then
+    echo -e "${RED}Error: No SSH public key provided.${NC}"
+    exit 1
+fi
+PUB_KEY="$1"
 echo -e "${CYAN}Normalized Public Key:${NC} $PUB_KEY"
-
-# Debugging: function to show processing logs
-debug_log() {
-    local message=$1
-    echo -e "${CYAN}[DEBUG]: $message${NC}"
-}
 
 # Add key to LXC containers
 add_key_to_lxc() {
     local id=$1
     local status
-
-    debug_log "Processing LXC container ID: $id"
 
     status=$($SUDO pct status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
@@ -45,9 +36,8 @@ add_key_to_lxc() {
 
     echo -e "${CYAN}Checking existing keys in LXC container $id...${NC}"
     existing_keys=$($SUDO pct exec "$id" -- cat /root/.ssh/authorized_keys 2>/dev/null || echo "")
-    echo -e "${CYAN}Existing Keys in $id:${NC}\n$existing_keys"
 
-    if echo "$existing_keys" | grep -Fxq "$(normalize_key "$PUB_KEY")"; then
+    if echo "$existing_keys" | grep -Fxq "$PUB_KEY"; then
         echo -e "${YELLOW}Key already exists in LXC container $id. Skipping.${NC}"
         return
     fi
@@ -65,30 +55,20 @@ add_key_to_vm() {
     local mount_dir="/mnt/vm-$id"
     local status
 
-    debug_log "Processing VM ID: $id"
-
     status=$($SUDO qm status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
         echo -e "${YELLOW}Skipping VM $id (not running).${NC}"
         return
     fi
 
-    # Detect Windows VMs and skip
-    if $SUDO qm config "$id" | grep -i "ostype" | grep -iq "win"; then
-        echo -e "${YELLOW}Skipping VM $id (Windows detected).${NC}"
-        return
-    fi
-
     echo -e "${CYAN}Checking existing keys in VM $id...${NC}"
     disk_path=$($SUDO qm config "$id" | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
-    echo -e "${CYAN}Disk Path for VM $id:${NC} $disk_path"
 
     $SUDO mkdir -p "$mount_dir"
     if $SUDO guestmount -a "/var/lib/vz/images/$id/$disk_path" -i --rw "$mount_dir"; then
         existing_keys=$(cat "$mount_dir/root/.ssh/authorized_keys" 2>/dev/null || echo "")
-        echo -e "${CYAN}Existing Keys in VM $id:${NC}\n$existing_keys"
 
-        if echo "$existing_keys" | grep -Fxq "$(normalize_key "$PUB_KEY")"; then
+        if echo "$existing_keys" | grep -Fxq "$PUB_KEY"; then
             echo -e "${YELLOW}Key already exists in VM $id. Skipping.${NC}"
             $SUDO guestunmount "$mount_dir"
             $SUDO rmdir "$mount_dir"
@@ -109,28 +89,15 @@ add_key_to_vm() {
 # Process LXC containers
 if [[ "$PROCESS_LXC" == true ]]; then
     LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
-    if [[ -z "$LXC_IDS" ]]; then
-        echo -e "${YELLOW}No LXC containers found.${NC}"
-    else
-        echo -e "${CYAN}[DEBUG] Found LXC containers: $LXC_IDS${NC}"
-        for id in $LXC_IDS; do
-            echo -e "${CYAN}[DEBUG] Processing LXC container ID: $id${NC}"
-            add_key_to_lxc "$id"
-        done
-    fi
+    for id in $LXC_IDS; do
+        add_key_to_lxc "$id"
+    done
 fi
 
 # Process VMs
 if [[ "$PROCESS_VM" == true ]]; then
     VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
-    if [[ -z "$VM_IDS" ]]; then
-        echo -e "${YELLOW}No VMs found.${NC}"
-    else
-        echo -e "${CYAN}[DEBUG] Found VMs: $VM_IDS${NC}"
-        for id in $VM_IDS; do
-            echo -e "${CYAN}[DEBUG] Processing VM ID: $id${NC}"
-            add_key_to_vm "$id"
-        done
-    fi
+    for id in $VM_IDS; do
+        add_key_to_vm "$id"
+    done
 fi
-
