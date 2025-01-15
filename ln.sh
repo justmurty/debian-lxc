@@ -16,7 +16,7 @@ else
 fi
 
 # Parse arguments for SSH public key and processing flags
-PUB_KEY=""
+ENCODED_KEY=""
 PROCESS_LXC=false
 PROCESS_VM=false
 
@@ -24,20 +24,27 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --lxc) PROCESS_LXC=true ;;
         --vm) PROCESS_VM=true ;;
-        *) PUB_KEY="$1" ;;
+        *) ENCODED_KEY="$1" ;;
     esac
     shift
 done
 
-# Validate the SSH public key
-if [[ -z "$PUB_KEY" ]]; then
+# Decode and validate the SSH public key
+if [[ -z "$ENCODED_KEY" ]]; then
     echo -e "${RED}Error: No SSH public key provided.${NC}"
     exit 1
 fi
-echo -e "${CYAN}Received Raw Public Key:${NC}"
+
+PUB_KEY=$(echo "$ENCODED_KEY" | base64 -d)
+if [[ -z "$PUB_KEY" ]]; then
+    echo -e "${RED}Error: Decoded public key is empty or invalid.${NC}"
+    exit 1
+fi
+
+echo -e "${CYAN}Decoded Public Key:${NC}"
 echo "$PUB_KEY"
 
-# Normalize the public key
+# Normalize the public key for processing
 normalize_key() {
     echo "$1" | tr -d '\n' | sed 's/\s\+/ /g'
 }
