@@ -58,6 +58,13 @@ show_progress() {
     printf "\r[%-20s] %d%%" $(printf '=%.0s' $(seq 1 $bars)) $progress
 }
 
+# Logging for skipped IDs
+skipped_logs=()
+
+log_skipped() {
+    skipped_logs+=("$1: $2")
+}
+
 # Function to add the key to an LXC container
 add_key_to_lxc() {
     local id=$1
@@ -65,6 +72,7 @@ add_key_to_lxc() {
 
     status=$($SUDO pct status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
+        log_skipped "LXC $id" "Not running"
         return
     fi
 
@@ -85,6 +93,13 @@ add_key_to_vm() {
 
     status=$($SUDO qm status "$id" | awk '{print $2}')
     if [[ "$status" != "running" ]]; then
+        log_skipped "VM $id" "Not running"
+        return
+    fi
+
+    os_type=$($SUDO qm config "$id" | grep -i "ostype" | awk '{print $2}')
+    if [[ "$os_type" == *"win"* ]]; then
+        log_skipped "VM $id" "Windows detected"
         return
     fi
 
@@ -102,6 +117,7 @@ add_key_to_vm() {
         $SUDO rmdir "$mount_dir"
     else
         $SUDO rmdir "$mount_dir"
+        log_skipped "VM $id" "Disk mount failed"
     fi
 }
 
@@ -137,6 +153,14 @@ if [[ "$PROCESS_VM" == true ]]; then
         done
         echo
     fi
+fi
+
+# Show skipped logs
+if [[ ${#skipped_logs[@]} -gt 0 ]]; then
+    echo -e "${YELLOW}Skipped IDs:${NC}"
+    for log in "${skipped_logs[@]}"; do
+        echo -e "${RED}$log${NC}"
+    done
 fi
 
 echo -e "${GREEN}SSH key processed for all specified containers and VMs.${NC}"
