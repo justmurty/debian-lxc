@@ -22,7 +22,7 @@ if (!(Test-Path $PublicKeyPath)) {
 }
 
 # Load the SSH public key
-$PublicKey = Get-Content $PublicKeyPath
+$PublicKey = Get-Content $PublicKeyPath -Raw
 Write-Color "Public key successfully loaded." "Green"
 
 # Get Proxmox connection details
@@ -32,8 +32,7 @@ $ProxmoxUser = Read-Host "Enter your Proxmox username (e.g., root)"
 # Manually copy the SSH public key
 Write-Color "Copying public key to Proxmox ($ProxmoxUser@$ProxmoxHost)..." "Cyan"
 try {
-    $PublicKeyContent = Get-Content $PublicKeyPath
-    $Command = "echo '$PublicKeyContent' | ssh $ProxmoxUser@$ProxmoxHost 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh'"
+    $Command = "echo '$PublicKey' | ssh $ProxmoxUser@$ProxmoxHost 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh'"
     Invoke-Expression $Command
     Write-Color "Public key successfully copied to Proxmox." "Green"
 } catch {
@@ -42,9 +41,8 @@ try {
     exit
 }
 
-# Execute the Bash script from GitHub
-$RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm"
-
+# Send the public key to ln.sh and execute it
+$RemoteCommand = "wget -qO- https://raw.githubusercontent.com/justmurty/proxmox-ssh_pub-add/refs/heads/win/ln.sh | bash -s -- --lxc --vm '$PublicKey'"
 Write-Color "Executing the script on Proxmox..." "Yellow"
 try {
     $sshCommand = "ssh -t $ProxmoxUser@$ProxmoxHost `"$RemoteCommand`""
