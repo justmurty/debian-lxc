@@ -82,6 +82,14 @@ if [[ "$PROCESS_LXC" == true ]]; then
                 echo -e "${YELLOW}Skipping LXC container $ID (not running).${NC}"
                 continue
             fi
+
+            echo -e "${CYAN}Checking existing keys in LXC container $ID...${NC}"
+            EXISTING_KEYS=$($SUDO pct exec $ID -- cat /root/.ssh/authorized_keys 2>/dev/null || echo "")
+            if echo "$EXISTING_KEYS" | grep -Fxq "$PUB_KEY"; then
+                echo -e "${YELLOW}Key already exists in LXC container $ID. Skipping.${NC}"
+                continue
+            fi
+
             echo -e "${CYAN}Adding SSH key to LXC container $ID...${NC}"
             $SUDO pct exec $ID -- mkdir -p /root/.ssh
             echo "$PUB_KEY" | $SUDO pct exec $ID -- bash -c "cat >> /root/.ssh/authorized_keys"
@@ -110,11 +118,20 @@ if [[ "$PROCESS_VM" == true ]]; then
                 continue
             fi
 
-            echo -e "${CYAN}Adding SSH key to VM $ID...${NC}"
+            echo -e "${CYAN}Checking existing keys in VM $ID...${NC}"
             DISK_PATH=$($SUDO qm config $ID | grep -E 'scsi|virtio|ide' | head -n1 | awk -F ':' '{print $2}' | awk '{print $1}')
             MOUNT_DIR="/mnt/vm-$ID"
             $SUDO mkdir -p $MOUNT_DIR
             if $SUDO guestmount -a "/var/lib/vz/images/$ID/$DISK_PATH" -i --rw $MOUNT_DIR; then
+                EXISTING_KEYS=$(cat "$MOUNT_DIR/root/.ssh/authorized_keys" 2>/dev/null || echo "")
+                if echo "$EXISTING_KEYS" | grep -Fxq "$PUB_KEY"; then
+                    echo -e "${YELLOW}Key already exists in VM $ID. Skipping.${NC}"
+                    $SUDO guestunmount $MOUNT_DIR
+                    $SUDO rmdir $MOUNT_DIR
+                    continue
+                fi
+
+                echo -e "${CYAN}Adding SSH key to VM $ID...${NC}"
                 echo "$PUB_KEY" | $SUDO tee -a "$MOUNT_DIR/root/.ssh/authorized_keys"
                 $SUDO guestunmount $MOUNT_DIR
                 $SUDO rmdir $MOUNT_DIR
