@@ -7,25 +7,26 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Проверка за root потребител
-if [[ <span class="math-inline">EUID \-ne 0 \]\]; then
-SUDO\='sudo'
-echo \-e "</span>{YELLOW}Изпълнява се като потребител, който не е root. Използва се sudo за привилегировани команди.<span class="math-inline">\{NC\}"
+# Check if the user is root, if not use sudo
+if [[ $EUID -ne 0 ]]; then
+    SUDO='sudo'
+    echo -e "${YELLOW}Running as non-root user. Using sudo for privileged commands.${NC}"
 else
-SUDO\=''
-echo \-e "</span>{GREEN}Изпълнява се като root потребител.<span class="math-inline">\{NC\}"
+    SUDO=''
+    echo -e "${GREEN}Running as root user.${NC}"
 fi
-\# Проверка за whiptail
-if \! command \-v whiptail &\> /dev/null; then
-echo \-e "</span>{RED}Грешка: 'whiptail' не е инсталиран. Инсталиране сега...${NC}"
+
+# Check if whiptail is installed
+if ! command -v whiptail &> /dev/null; then
+    echo -e "${RED}Error: 'whiptail' is not installed. Installing it now...${NC}"
     $SUDO apt update && $SUDO apt install -y whiptail
-    if [[ <span class="math-inline">? \-ne 0 \]\]; then
-echo \-e "</span>{RED}Неуспешно инсталиране на 'whiptail'. Изход.${NC}"
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to install 'whiptail'. Exiting.${NC}"
         exit 1
     fi
 fi
 
-# Функция за инсталиране на libguestfs-tools с прогрес бар
+# Function to install libguestfs-tools with progress bar
 install_libguestfs_tools() {
     {
         echo 10
@@ -33,7 +34,7 @@ install_libguestfs_tools() {
         echo 50
         $SUDO apt install -y libguestfs-tools > /dev/null 2>&1
         echo 100
-    } | whiptail --gauge "Installing 'libguestfs-tools'..." 6 50 0 2>&1  # Redirect stderr
+    } | whiptail --gauge "Installing 'libguestfs-tools'..." 6 50 0
 }
 \# Въвеждане на публичен ключ
 PUB\_KEY\=</span>(whiptail --title "SSH Публичен Ключ" --inputbox "Моля, поставете вашия SSH публичен ключ:" 10 60 3>&1 1>&2 2>&3)
