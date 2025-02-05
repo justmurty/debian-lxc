@@ -31,10 +31,10 @@ install_libguestfs_tools() {
         echo 10
         $SUDO apt update -y > /dev/null 2>&1
         echo 50
-        <span class="math-inline">SUDO apt install \-y libguestfs\-tools \> /dev/null 2\>&1
-echo 100
-\} \| whiptail \-\-gauge "Инсталиране на 'libguestfs\-tools'\.\.\." 6 50 0
-\}
+        $SUDO apt install -y libguestfs-tools > /dev/null 2>&1
+        echo 100
+    } | whiptail --gauge "Installing 'libguestfs-tools'..." 6 50 0 2>&1  # Redirect stderr
+}
 \# Въвеждане на публичен ключ
 PUB\_KEY\=</span>(whiptail --title "SSH Публичен Ключ" --inputbox "Моля, поставете вашия SSH публичен ключ:" 10 60 3>&1 1>&2 2>&3)
 
