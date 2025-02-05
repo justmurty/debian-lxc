@@ -1,114 +1,137 @@
 #!/bin/bash
 
-# Color definitions
+# Цветове
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No color
+NC='\033[0m'
 
-# Check if the user is root, if not use sudo
-if [[ $EUID -ne 0 ]]; then
-    SUDO='sudo'
-    echo -e "${YELLOW}Running as non-root user. Using sudo for privileged commands.${NC}"
+# Проверка за root потребител
+if [[ <span class="math-inline">EUID \-ne 0 \]\]; then
+SUDO\='sudo'
+echo \-e "</span>{YELLOW}Изпълнява се като потребител, който не е root. Използва се sudo за привилегировани команди.<span class="math-inline">\{NC\}"
 else
-    SUDO=''
-    echo -e "${GREEN}Running as root user.${NC}"
+SUDO\=''
+echo \-e "</span>{GREEN}Изпълнява се като root потребител.<span class="math-inline">\{NC\}"
 fi
-
-# Check if whiptail is installed
-if ! command -v whiptail &> /dev/null; then
-    echo -e "${RED}Error: 'whiptail' is not installed. Installing it now...${NC}"
+\# Проверка за whiptail
+if \! command \-v whiptail &\> /dev/null; then
+echo \-e "</span>{RED}Грешка: 'whiptail' не е инсталиран. Инсталиране сега...${NC}"
     $SUDO apt update && $SUDO apt install -y whiptail
-    if [[ $? -ne 0 ]]; then
-        echo -e "${RED}Failed to install 'whiptail'. Exiting.${NC}"
+    if [[ <span class="math-inline">? \-ne 0 \]\]; then
+echo \-e "</span>{RED}Неуспешно инсталиране на 'whiptail'. Изход.${NC}"
         exit 1
     fi
 fi
 
-# Function to install libguestfs-tools with progress bar
+# Функция за инсталиране на libguestfs-tools с прогрес бар
 install_libguestfs_tools() {
     {
         echo 10
         $SUDO apt update -y > /dev/null 2>&1
         echo 50
-        $SUDO apt install -y libguestfs-tools > /dev/null 2>&1
-        echo 100
-    } | whiptail --gauge "Installing 'libguestfs-tools'..." 6 50 0
-}
+        <span class="math-inline">SUDO apt install \-y libguestfs\-tools \> /dev/null 2\>&1
+echo 100
+\} \| whiptail \-\-gauge "Инсталиране на 'libguestfs\-tools'\.\.\." 6 50 0
+\}
+\# Въвеждане на публичен ключ
+PUB\_KEY\=</span>(whiptail --title "SSH Публичен Ключ" --inputbox "Моля, поставете вашия SSH публичен ключ:" 10 60 3>&1 1>&2 2>&3)
 
-# Ask for the public key
-PUB_KEY=$(whiptail --title "SSH Public Key" --inputbox "Please paste your SSH public key:" 10 60 3>&1 1>&2 2>&3)
+if [[ -z "<span class="math-inline">PUB\_KEY" \]\]; then
+echo \-e "</span>{RED}Грешка: Не е предоставен публичен ключ. Изход.<span class="math-inline">\{NC\}"
+exit 1
+fi
+\# Обработка на LXC контейнери
+LXC\_IDS\=\(</span>($SUDO pct list | awk 'NR>1 {print $1}'))
+if [[ <span class="math-inline">\{\#LXC\_IDS\[@\]\} \-gt 0 \]\]; then
+LXC\_CHOICES\=</span>(whiptail --title "Избор на LXC контейнери" --checklist \
+  "Изберете контейнерите за обработка (SPACE за избор, ENTER за потвърждение):" 15 60 2 \
+  "all" "Всички LXC контейнери" OFF \
+  ${LXC_IDS[@]/#/\"} OFF 3>&1 1>&2 2>&3)
 
-if [[ -z "$PUB_KEY" ]]; then
-    echo -e "${RED}Error: No public key provided. Exiting.${NC}"
+  if [[ <span class="math-inline">? \-ne 0 \]\]; then
+echo \-e "</span>{RED}Не е направен избор. Изход.${NC}"
     exit 1
+  fi
+
+  if [[ "<span class="math-inline">LXC\_CHOICES" \=\= \*"all"\* \]\]; then
+for ID in "</span>{LXC_IDS[@]}"; do
+      echo -e "${YELLOW}Добавяне на ключ към LXC контейнер <span class="math-inline">ID\.\.\.</span>{NC}"
+      $SUDO pct exec $ID -- mkdir -p /root/.ssh
+      $SUDO pct exec $ID -- bash -c "echo \"<span class="math-inline">PUB\_KEY\\" \>\> /root/\.ssh/authorized\_keys"
+echo \-e "</span>{GREEN}Ключът е добавен към LXC контейнер <span class="math-inline">ID\.</span>{NC}"
+    done
+  else
+    for ID in "${LXC_IDS[@]}"; do
+      if [[ " $LXC_CHOICES " == *" <span class="math-inline">ID "\* \]\]; then \# Check if ID is in the choices
+echo \-e "</span>{YELLOW}Добавяне на ключ към LXC контейнер <span class="math-inline">ID\.\.\.</span>{NC}"
+        $SUDO pct exec $ID -- mkdir -p /root/.ssh
+        $SUDO pct exec $ID -- bash -c "echo \"<span class="math-inline">PUB\_KEY\\" \>\> /root/\.ssh/authorized\_keys"
+echo \-e "</span>{GREEN}Ключът е добавен към LXC контейнер <span class="math-inline">ID\.</span>{NC}"
+      fi
+    done
+  fi
+else
+  echo -e "<span class="math-inline">\{YELLOW\}Не са намерени LXC контейнери\.</span>{NC}"
 fi
 
-# Process LXC containers
-if whiptail --title "LXC Containers" --yesno "Process LXC containers?" 10 60; then
-    LXC_IDS=$($SUDO pct list | awk 'NR>1 {print $1}')
-    if [[ -z "$LXC_IDS" ]]; then
-        echo -e "${YELLOW}No LXC containers found.${NC}"
-    else
-        for ID in $LXC_IDS; do
-            if whiptail --title "LXC Container $ID" --yesno "Add key to LXC container $ID?" 10 60; then
-                echo -e "${YELLOW}Adding key to LXC container $ID...${NC}"
-                $SUDO pct exec $ID -- mkdir -p /root/.ssh
-                $SUDO pct exec $ID -- bash -c "echo \"$PUB_KEY\" >> /root/.ssh/authorized_keys"
-                echo -e "${GREEN}Key added to LXC container $ID.${NC}"
-            fi
-        done
-    fi
-fi
 
+# Обработка на виртуални машини
+VM_IDS=($($SUDO qm list | awk 'NR>1 {print $1}'))
+if [[ ${#VM_IDS[@]} -gt 0 ]]; then
 
-# Process VMs
-if whiptail --title "Virtual Machines" --yesno "Process VMs?" 10 60; then
-    if whiptail --title "Install libguestfs-tools" --yesno \
-"Do you want to install 'libguestfs-tools'? It is required for proper VM processing." 10 60; then
+ if whiptail --title "Инсталиране на libguestfs-tools" --yesno \
+"Желаете ли да инсталирате 'libguestfs-tools'? Необходимо е за правилна обработка на виртуални машини." 10 60; then
         install_libguestfs_tools
-        if [[ $? -ne 0 ]]; then
-            echo -e "${RED}Failed to install 'libguestfs-tools'. VM processing may encounter issues.${NC}"
-        else
-            echo -e "${GREEN}'libguestfs-tools' installed successfully.${NC}"
-        fi
-    else
-        echo -e "${YELLOW}Skipping installation of 'libguestfs-tools'.${NC}"
-        echo -e "${RED}VM processing will continue, but full functionality may not be available.${NC}"
-    fi
-
-    VM_IDS=$($SUDO qm list | awk 'NR>1 {print $1}')
-    if [[ -z "$VM_IDS" ]]; then
-        echo -e "${YELLOW}No VMs found.${NC}"
-    else
-        for ID in $VM_IDS; do
-             if whiptail --title "VM $ID" --yesno "Add key to VM $ID?" 10 60; then
-                echo -e "${YELLOW}Adding key to VM $ID...${NC}"
-                DISK_PATH=$($SUDO qm config $ID | grep '^scsi\|^virtio\|^ide' | head -1 | awk -F ':' '{print $2}' | awk '{print $1}')
-                MOUNT_DIR="/mnt/vm-$ID"
-                if [[ -n "$DISK_PATH" ]]; then
-                    mkdir -p $MOUNT_DIR
-                    $SUDO guestmount -a "/var/lib/vz/images/$ID/$DISK_PATH" -i --ro $MOUNT_DIR 2>/dev/null
-                    if [[ $? -ne 0 ]]; then
-                        echo -e "${RED}Failed to mount VM $ID. Skipping.${NC}"
-                    else
-                        if [[ -d "$MOUNT_DIR/root/.ssh" ]]; then
-                            echo "$PUB_KEY" | $SUDO tee -a "$MOUNT_DIR/root/.ssh/authorized_keys" > /dev/null
-                        else
-                            $SUDO mkdir -p "$MOUNT_DIR/root/.ssh"
-                            echo "$PUB_KEY" | $SUDO tee "$MOUNT_DIR/root/.ssh/authorized_keys" > /dev/null
-                        fi
-                        $SUDO guestunmount $MOUNT_DIR
-                        rmdir $MOUNT_DIR
-                        echo -e "${GREEN}Key added to VM $ID.${NC}"
-                    fi
-                else
-                    echo -e "${RED}No valid disk found for VM $ID. Skipping.${NC}"
-                fi
-            fi
-        done
-    fi
+        if [[ <span class="math-inline">? \-ne 0 \]\]; then
+echo \-e "</span>{RED}Неуспешно инсталиране на 'libguestfs-tools'. Обработката на виртуални машини може да има проблеми.<span class="math-inline">\{NC\}"
+else
+echo \-e "</span>{GREEN}'libguestfs-tools' е инсталиран успешно.<span class="math-inline">\{NC\}"
 fi
+else
+echo \-e "</span>{YELLOW}Пропуска се инсталирането на 'libguestfs-tools'.<span class="math-inline">\{NC\}"
+echo \-e "</span>{RED}Обработката на виртуални машини ще продължи, но пълната функционалност може да не е налична.<span class="math-inline">\{NC\}"
+fi
+VM\_CHOICES\=</span>(whiptail --title "Избор на виртуални машини" --checklist \
+  "Изберете виртуалните машини за обработка (SPACE за избор, ENTER за потвърждение):" 15 60 2 \
+  "all" "Всички виртуални машини" OFF \
+  ${VM_IDS[@]/#/\"} OFF 3>&1 1>&2 2>&3)
 
-echo -e "${CYAN}Processing completed.${NC}"
+  if [[ <span class="math-inline">? \-ne 0 \]\]; then
+echo \-e "</span>{RED}Не е направен избор. Изход.${NC}"
+    exit 1
+  fi
+
+  if [[ "<span class="math-inline">VM\_CHOICES" \=\= \*"all"\* \]\]; then
+for ID in "</span>{VM_IDS[@]}"; do
+        # ... (останалата част от кода за обработка на VM, както преди, но вече в цикъл)
+        echo -e "${YELLOW}Добавяне на ключ към VM <span class="math-inline">ID\.\.\.</span>{NC}"
+            DISK_PATH=$($SUDO qm config $ID | grep '^scsi\|^virtio\|^ide' | head -1 | awk -F ':' '{print $2}' | awk '{print $1}')
+            MOUNT_DIR="/mnt/vm-$ID"
+            if [[ -n "$DISK_PATH" ]]; then
+                mkdir -p $MOUNT_DIR
+                $SUDO guestmount -a "/var/lib/vz/images/$ID/$DISK_PATH" -i --ro $MOUNT_DIR 2>/dev/null
+                if [[ <span class="math-inline">? \-ne 0 \]\]; then
+echo \-e "</span>{RED}Неуспешно монтиране на VM <span class="math-inline">ID\. Пропуска се\.</span>{NC}"
+                else
+                    if [[ -d "$MOUNT_DIR/root/.ssh" ]]; then
+                        echo "$PUB_KEY" | $SUDO tee -a "$MOUNT_DIR/root/.ssh/authorized_keys" > /dev/null
+                    else
+                        $SUDO mkdir -p "$MOUNT_DIR/root/.ssh"
+                        echo "$PUB_KEY" | $SUDO tee "$MOUNT_DIR/root/.ssh/authorized_keys" > /dev/null
+                    fi
+                    $SUDO guestunmount $MOUNT_DIR
+                    rmdir <span class="math-inline">MOUNT\_DIR
+echo \-e "</span>{GREEN}Ключът е добавен към VM <span class="math-inline">ID\.</span>{NC}"
+                fi
+            else
+                echo -e "${RED}Не е намерен валиден диск за VM <span class="math-inline">ID\. Пропуска се\.</span>{NC}"
+            fi
+    done
+  else
+    for ID in "${VM_IDS[@]}"; do
+      if [[ " $VM_CHOICES " == *" <span class="math-inline">ID "\* \]\]; then \# Check if ID is in the choices
+\# \.\.\. \(останалата част от кода за обработка на VM, както преди, но вече в цикъл\)
+echo \-e "</span>{YELLOW}Добавяне на ключ към VM <span class="math-inline">ID\.\.\.</span>{NC}"
+            DISK_PATH=<span class="math-inline">\(</span>
